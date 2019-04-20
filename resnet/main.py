@@ -2,6 +2,7 @@ import torch
 import argparse
 import torch.nn as nn
 import os
+import time
 import shutil
 import torch.distributed as dist
 from resnet import torch_model as models
@@ -87,10 +88,9 @@ def main_worker(gpu, ngpus_per_node, args):
             transforms.RandomResizedCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize,
+            normalize, # compose these transforms in sequence
         ])
     )
-    import pdb; pdb.set_trace()
 
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -141,12 +141,90 @@ def main_worker(gpu, ngpus_per_node, args):
             }, is_best)
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
+    batch_time = AverageMeter('Time', ':6.3f')
+    data_time = AverageMeter('Data', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress = ProgressMeter(len(train_loader), batch_time, data_time, losses, top1,
+                             top5, prefix="Epoch: [{}]".format(epoch))
 
+    # switch to train mode
+    model.train()
+
+    end = time.time()
+    for i, (input, target) in enumerate(train_loader):
+        # measure data loading time
+        data_time.update(time.time() - end)
+
+        if args.gpu is not None:
+            input = input.cuda(args.gpu, non_blocking=True)
+            target = target.cuda(args.gpu, non_blocking=True)
+
+        # compute output
+        output = model(input) # forward
+        loss = criterion(output, target) # get the gradient
+
+        # measure accuracy and record loss
+        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        losses.update(loss.item(), input.size(0))
+        top1.update(acc1[0], input.size(0))
+        top5.update(acc5[0], input.size(0))
+
+        # compute gradient and do SGD step
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if i % args.print_freq == 0:
+            progress.print(i)
     return
 
 
-def validate():
-    return
+def validate(val_loader, model, criterion, args):
+    batch_time = AverageMeter('Time', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress = ProgressMeter(len(val_loader), batch_time, losses, top1, top5,
+                             prefix='Test: ')
+
+    # switch to evaluate mode
+    model.eval()
+
+    with torch.no_grad(): # in the validate stage, don't calculate the gradient
+        end = time.time()
+        for i, (input, target) in enumerate(val_loader):
+            if args.gpu is not None:
+                input = input.cuda(args.gpu, non_blocking=True)
+                target = target.cuda(args.gpu, non_blocking=True)
+
+            # compute output
+            output = model(input)
+            loss = criterion(output, target)
+
+            # measure accuracy and record loss
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            losses.update(loss.item(), input.size(0))
+            top1.update(acc1[0], input.size(0))
+            top5.update(acc5[0], input.size(0))
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if i % args.print_freq == 0:
+                progress.print(i)
+
+        # TODO: this should also be done with the ProgressMeter
+        print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
+              .format(top1=top1, top5=top5))
+
+    return top1.avg
 
 def save_checkpoint(state, is_best, filename = 'checkpoint.pth.tar'):
     torch.save(state, filename)
@@ -248,7 +326,12 @@ if __name__ == '__main__':
     parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)',
                         dest='weight_decay')
-    parser.add_argument('data', default = "resnet/tiny-imagenet-200",metavar='DIR',
+    parser.add_argument('--data', default = "../data/tiny-imagenet-200",metavar='DIR',
                         help='path to dataset')
+    parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
+                       help='number of data loading workers (default: 4)')
+    parser.add_argument('--print_freq', default=1000, type=int,
+                        metavar='print frequency', help='how many epoch to print',
+                        dest='print_freq')
     args = parser.parse_args()
     main_worker(gpu = None, ngpus_per_node=None , args=args)

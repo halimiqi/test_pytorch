@@ -15,10 +15,11 @@ def is_image_file(filename):
 def find_classes(dir):
     classes = os.listdir(dir)
     classes.sort()
-    class_to_idx = {classes[i]: i for i in range(len(classes))}
+    class_to_idx = {classes[i]: i for i in range(len(classes))} # build the dictionary
     return classes, class_to_idx
 
 def make_dataset(dir, class_to_idx):
+    # return list which have the images' path and the index
     images = []
     for target in os.listdir(dir):
         d = os.path.join(dir, target)
@@ -30,10 +31,9 @@ def make_dataset(dir, class_to_idx):
                 path = '{0}/{1}'.format(target, filename)
                 item = (path, class_to_idx[target])
                 images.append(item)
-
     return images
 
-
+# this is the images
 class ImageFolder(data.Dataset):
     def __init__(self, root, transform=None, target_transform=None):
         classes, class_to_idx = find_classes(root)
@@ -44,7 +44,7 @@ class ImageFolder(data.Dataset):
         self.classes = classes
         self.class_to_idx = class_to_idx
         self.transform = transform
-        self.target_transform = target_transform
+        self.target_transform = target_transform # transform the int index of the labels
 
     def __getitem__(self, index):
         path, target = self.imgs[index]
@@ -53,8 +53,7 @@ class ImageFolder(data.Dataset):
             img = self.transform(img)
         if self.target_transform is not None:
             target = self.target_transform(target)
-
         return img, target
 
     def __len__(self):
-        return len(self.imgs)
+        return len(self.imgs)  # how many imgs

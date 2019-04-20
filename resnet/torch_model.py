@@ -37,23 +37,23 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
-        def forward(self, x):
-            identity = x
+    def forward(self, x):
+        identity = x
 
-            out = self.conv1(x)
-            out = self.bn1(out)
-            out = self.relu(out)
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
 
-            out = self.conv2(out)
-            out = self.bn2(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
 
-            if self.downsample is not None:
-                identity = self.downsample(x)
+        if self.downsample is not None:
+            identity = self.downsample(x)
 
-            out += identity  # residual network
-            out = self.relu(out)
+        out += identity  # residual network
+        out = self.relu(out)
 
-            return out
+        return out
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -162,7 +162,6 @@ class ResNet(nn.Module):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-
         return x
 
 def resnet18(pretrained=False, **kwargs):
