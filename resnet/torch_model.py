@@ -15,7 +15,7 @@ model_urls = {
 
 def conv33(in_planes, out_planes, stride = 1, groups = 1):
 
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride,groups = groups, bias = False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,padding = 1,groups = groups, bias = False)
 
 def conv11(in_planes, out_planes, stride = 1):
     return nn.Conv2d(in_planes, out_planes, kernel_size = 1, stride = stride, bias = False)
@@ -94,7 +94,7 @@ class Bottleneck(nn.Module):
         return out
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes = 1000, zero_init_residual = False, groups = 1, width_per_group = 64, norm_layer = None):
+    def __init__(self, block, layers, num_classes = 3755, zero_init_residual = False, groups = 1, width_per_group = 64, norm_layer = None):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -181,7 +181,12 @@ def resnet34(pretrained=False, **kwargs):
     """
     model = ResNet(BasicBlock, [3,4,6,3], **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_urls(model_urls['resnet34']))
+        model_dict = model.state_dict()
+        pretrained_dict = model_zoo.load_url( model_urls['resnet34'])
+        pretrained_dict = {k:v for k,v in pretrained_dict.items() if "fc" not in k }
+        model_dict.update(pretrained_dict)
+        #model.load_state_dict(model_zoo.load_url( model_urls['resnet34']))
+        model.load_state_dict(model_dict)
     return model
 
 def resnet50(pretrained=False, **kwargs):

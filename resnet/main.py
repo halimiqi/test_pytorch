@@ -9,6 +9,11 @@ from resnet import torch_model as models
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+best_acc1 = 0
+
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
     args.gpu = gpu
@@ -29,11 +34,11 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # create model
     if args.pretrained:
-        model = models.resnet18(pretrained=True)
+        model = models.resnet34(pretrained=True)
     else:
         print("=> creating model '{}'".format("resnet18"))
-        model = models.resnet18()
-
+        model = models.resnet34()
+        print("=> finish creating models")
     if args.distributed:
         if args.gpu is not None:
             torch.cuda.set_device(args.gpu)
@@ -45,11 +50,12 @@ def main_worker(gpu, ngpus_per_node, args):
             model.cuda()
             model = torch.nn.parallel.DistributedDataParallel(model)
     elif args.gpu is not None:
-        torch.cuda.set_device(args.gpu) # set the default gpu device
+        #torch.cuda.set_device(args.gpu) # set the default gpu device
         model = model.cuda(args.gpu)
     else:
         # DataParallel will divide and allocate batch_size to all available GPUs
-        model = torch.nn.DataParallel(model)
+        #model = torch.nn.DataParallel(model)
+        model = model
 
     # define the loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -134,7 +140,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                                     and args.rank % ngpus_per_node == 0):
             save_checkpoint({
                 'epoch': epoch + 1,
-                'arch': args.arch,
+                'arch': args.model_name,
                 'state_dict': model.state_dict(),
                 'best_acc1': best_acc1,
                 'optimizer': optimizer.state_dict(),
@@ -146,8 +152,8 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     losses = AverageMeter('Loss', ':.4e')
     top1 = AverageMeter('Acc@1', ':6.2f')
     top5 = AverageMeter('Acc@5', ':6.2f')
-    progress = ProgressMeter(len(train_loader), batch_time, data_time, losses, top1,
-                             top5, prefix="Epoch: [{}]".format(epoch))
+    progress = ProgressMeter(len(train_loader), batch_time, losses, top1,
+                             top5, prefix="Epoch: [{}]" .format(epoch))
 
     # switch to train mode
     model.train()
@@ -305,7 +311,7 @@ if __name__ == '__main__':
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
 
-    parser.add_argument('-b', '--batch-size', default=256, type=int,
+    parser.add_argument('-b', '--batch-size', default=128  , type=int,
                         metavar='N',
                         help='mini-batch size (default: 256), this is the total '
                              'batch size of all GPUs on the current node when '
@@ -315,7 +321,7 @@ if __name__ == '__main__':
                         metavar='LR', help='initial learning rate', dest='lr')
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                         help='momentum')
-    parser.add_argument('--resume', default='', type=str, metavar='PATH',
+    parser.add_argument('--resume', default="model_best.pth.tar", type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                         help='evaluate model on validation set')
@@ -326,12 +332,19 @@ if __name__ == '__main__':
     parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)',
                         dest='weight_decay')
-    parser.add_argument('--data', default = "../data/tiny-imagenet-200",metavar='DIR',
+    parser.add_argument('--data', default = "../data/files",metavar='DIR',
                         help='path to dataset')
     parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
                        help='number of data loading workers (default: 4)')
-    parser.add_argument('--print_freq', default=1000, type=int,
+    parser.add_argument('--print_freq', default=100, type=int,
                         metavar='print frequency', help='how many epoch to print',
                         dest='print_freq')
+    parser.add_argument('--multiprocessing_distributed', default=False, type=bool,
+                        metavar='if multiprocessors', help='if multiprocessorss',
+                        dest='multiprocessing_distributed')
+    parser.add_argument('--model_name', default="resnet_18", type=str,
+                        metavar='model name', help='This is the model name',
+                        dest='model_name')
+
     args = parser.parse_args()
-    main_worker(gpu = None, ngpus_per_node=None , args=args)
+    main_worker(gpu = args.gpu, ngpus_per_node=None  , args=args)
